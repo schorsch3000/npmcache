@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+#set -x
+set -e
+packageFile='package.json'
+packageTarget='node_modules'
+bin='npm'
+cacheDir="$HOME/.npmcache/"
+hash_prefix="npm-$(npm -v)/$(echo "$*" | md5sum | cut -d' ' -f1)"
+
+
+function install(){
+    echo removing current node_modules to get a clean install
+    rm -rf node_modules
+    mkdir -p "$(get_archive_dir)"
+    echo "$bin $*" > "$(get_archive_dir)/../command"
+    $bin  "$@"
+}
+
+function get_archive_path(){
+    echo "$(get_archive_dir)$bin.tar"
+}
+function get_archive_dir(){
+    echo "$cacheDir/$hash_prefix/$hash/"
+}
+function store(){
+    mkdir -p "$(get_archive_dir)"
+    touch "$(get_archive_dir)/stored"
+    tar -cf "$(get_archive_path)" "$packageTarget"
+
+}
+function restore(){
+    echo "try to restore cached modules"
+    test -f "$(get_archive_path)" || return 1
+    tar -xf "$(get_archive_path)"
+    echo "restored module set from cache"
+    touch "$(get_archive_dir)/restored"
+}
+
+
+function cached_install(){
+    restore && return 0
+    echo "no cached module set found, running npm install $*"
+    install "$@"
+    echo "saving installed module set"
+    store
+
+}
+
+
+function clean(){
+
+    time="$2"
+    echo "$time" | egrep -q "^[1-9][0-9]*$" || time=30
+
+    find "$cacheDir" -maxdepth 4 -name restored -mtime "$time"
+    find "$cacheDir" -maxdepth 4 -name restored -exec dirname "{}" \; -print0 | xargs -0 rm -rf
+
+
+}
+
+hash=$(md5sum "$packageFile" | cut -d' ' -f1)
+
+
+
+case $1 in
+    "")
+        echo
+        echo "npmcache:"
+        echo
+        echo "   install [npm-options]   to install node modules from cache if possible, otherwise"
+        echo "                           directly"
+        echo
+        echo "   clean [time in days]    clean up old cached module sets that are not restored in "
+        echo "                           x days, default: 30"
+        echo
+        echo "Note that all npm options will be part of the cache-identifier, that ensures that you "
+        echo "will get different results e.g. by using --production."
+        echo "Unfortunately this means that you also will get another identifier by swapping "
+        echo "arguments or adding nonexistent arguments"
+        echo
+        echo "cache is stored at $cacheDir"
+        echo
+        ;;
+    "install")
+        cached_install "$@"
+        ;;
+    "clean")
+        clean "$@"
+        ;;
+esac
+
+
+
