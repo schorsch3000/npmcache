@@ -8,7 +8,7 @@ addons:
     sources:
     - debian-sid    # Grab shellcheck from the Debian repo (o_O)
     packages:
-    - shellcheck npmcache
+    - shellcheck
 
 
-script: shellcheck
+script: shellcheck npmcache
